@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 def display_summary(OIII_ratios, SII_ratios, temp, den):
     '''
@@ -18,7 +19,7 @@ def display_summary(OIII_ratios, SII_ratios, temp, den):
     Returns:
         None
     '''
-    for i in range(n):
+    for i in range(len(OIII_ratios)):
         print(f"OIII 4363/5007+ = {OIII_ratios[i]:.3f}, SII 6716/6731 = {SII_ratios[i]:.3f}, T = {temp[i]:.0f} K, n_e = {den[i]:.0f} cm-3")
 
 

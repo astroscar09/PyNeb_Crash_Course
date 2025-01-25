@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.cpython-*
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.log
+*.tmp
+
+
