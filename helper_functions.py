@@ -44,6 +44,7 @@ def dist_getcritdensity(atom, K, return_type = 'array'):
             store_crit_density[idx] = np.nan
 
     if return_type == 'df':
+        
         store_crit_density = pd.DataFrame(store_crit_density, columns = ['N_crit_1', 'N_crit_2', 'N_crit_3', 'N_crit_4', 'N_crit_5'])
         store_crit_density['Temperature'] = K
 
@@ -59,3 +60,23 @@ def ionic_abundance(ion, int, tem, den, wave):
     ion_abu = ion.getIonAbundance(int_ratio = int, tem = tem, den = den, wave = wave)
     
     return ion_abu
+
+def assign_temperature(temp, value):
+    
+    temp_arr = temp.copy() #added this copy to not overwrite the original input array
+
+    for idx, temp in enumerate(temp_arr):
+        if np.isnan(temp):
+            temp_arr[idx] = value
+    
+    return temp_arr
+
+def assign_density(den, value):
+    
+    den_arr = den.copy() #added this copy to not overwrite the original input array
+    
+    for idx, den in enumerate(den_arr):
+        if np.isnan(den):
+            den_arr[idx] = value
+    
+    return den_arr
