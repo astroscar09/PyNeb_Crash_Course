@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 def display_summary(OIII_ratios, SII_ratios, temp, den):
     '''
@@ -124,6 +125,50 @@ def ionic_abundance(ion, int, tem, den, wave):
     
     return ion_abu
 
+
+def get_ion_density_limits(ion, species, temp = 1e4):
+
+    '''
+    Function to get the lower and upper density limits for a given ion
+
+    Parameters:
+    
+    ion: Pyneb Ion object
+        Ion object from Pyneb
+    
+    species: str
+        Species of the ion [OIII, SII supported atm]
+    
+    temp: float, optional
+        Temperature in Kelvin
+    
+    Returns:
+    
+    den_limits: array of float
+        Array of lower and upper density limits
+    '''
+    
+    map_species = {'OIII': 'L(4363)/(L(5007)+L(4959))',
+                   'SII': 'L(6716)/L(6731)',            #we need to add this one in through addDiag I think
+                    }
+    
+    pyneb_input = map_species[species]
+
+    low_den_lim = ion.getLowDensRatio(to_eval = pyneb_input, temp = temp)
+    high_den_limit = ion.getLowHighRatio(to_eval = pyneb_input, temp = temp)
+
+    den_limits = np.array([low_den_lim, high_den_limit])
+
+    if not np.isfinite([den_limits]).all():
+        print('WARNING')
+        print('-------------------------------------------')
+        print('At least one of the density limits is a NaN')
+        print(den_limits)
+        print('-------------------------------------------')
+        
+
+    return den_limits
+
 def replace_NaNs(arr, value):
 
     '''
@@ -142,8 +187,116 @@ def replace_NaNs(arr, value):
     
     temp_arr = arr.copy() #added this copy to not overwrite the original input array
 
-    for idx, temp in enumerate(temp_arr):
-        if np.isnan(temp):
-            temp_arr[idx] = value
+    mask = np.isnan(temp_arr)
+
+    temp_arr[mask] = value
     
     return temp_arr
+
+def plot_distribution(data, ax, color):
+
+    '''
+    Function to plot a distribution of data
+
+    Parameters:
+    data: array of float
+        Data to plot
+    color: str
+        Color of the plot
+    label: str
+        Label of the plot
+    ax: matplotlib axis object, optional
+        Axis to plot on
+
+    Returns:
+        None
+    '''
+
+    
+    ax.hist(data, bins = 35, color = color, alpha = 0.5)
+    
+def compute_OIII_metallicity(O3, OIII_4363, OIII_4969, OIII_5007, Hbeta, 
+                             temp, den, plot = None):
+    
+    '''
+    Function to compute the metallicity using the OIII 4363, 4969, 5007 lines
+
+    Parameters:
+    
+    O3: Pyneb Ion object
+        Ion object from Pyneb
+    
+    OIII_4363: float or array of floats
+        Intensity of the OIII 4363 line
+    
+    OIII_4969: float or array of floats
+        Intensity of the OIII 4969 line
+    
+    OIII_5007: float or array of floats
+        Intensity of the OIII 5007 line
+    
+    Hbeta: float or array of floats
+        Intensity of the Hbeta line
+    
+    temp: float or array of floats
+        Temperature in Kelvin
+    
+    den: float or array of floats
+        Electron density in cm^-3
+    
+    plot: bool, optional
+        Whether to plot the distribution of the metallicities
+    
+    Returns:
+    l16: float
+        16th percentile of the distribution
+    
+    med: float
+        Median of the distribution
+    
+    u84: float
+        84th percentile of the distribution
+    
+    total_OIII_abundance: array of floats
+        Distribution of metallicities
+    '''
+
+    #converting the OIII lines to intensities relative to Hbeta * 100 for PyNeb
+    OIII5007_int = convert_int_relative_to_hbeta(OIII_5007, Hbeta)
+    OIII4969_int = convert_int_relative_to_hbeta(OIII_4969, Hbeta)
+    OIII4363_int = convert_int_relative_to_hbeta(OIII_4363, Hbeta)
+
+    #getting the ionic abundances for the OIII lines
+    OIII_5007_ion_abundance = ionic_abundance(O3, OIII5007_int, temp, den, 5007)
+    OIII_4969_ion_abundance = ionic_abundance(O3, OIII4969_int, temp, den, 4969)
+    OIII_4363_ion_abundance = ionic_abundance(O3, OIII4363_int, temp, den, 4363)
+
+    #computing the total OIII abundance, summing across the columns resulting in a distribution of
+    #Metallicites for each of the temperatures and densities provided
+    total_OIII_abundance = np.sum([OIII_5007_ion_abundance, 
+                                   OIII_4969_ion_abundance, 
+                                   OIII_4363_ion_abundance], 
+                                   axis = 0)
+    
+    #converting this to 12+log(O/H) using the relation from the PyNeb documentation
+    metallicity = 12 + np.log10(total_OIII_abundance)
+
+    l16, med, u84 = np.percentile(metallicity, [16, 50, 84])
+
+    if plot:
+        
+        fig, ax = plt.subplots()
+        
+        plot_distribution(metallicity, ax, 'purple')
+        
+        ax.set_xlabel('12 + log(O/H)', fontsize = 15)
+        ax.set_ylabel('Counts', fontsize = 15)
+        
+        ax.axvline(l16, color = 'red', linestyle = '-', label = f'16th Percentile')
+        ax.axvline(med, color = 'black', linestyle = '--', label = f'Median')
+        ax.axvline(u84, color = 'red', linestyle = '-', label = f'84th Percentile')
+        
+        ax.legend()
+
+    return l16, med, u84, metallicity
+
