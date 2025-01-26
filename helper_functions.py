@@ -1,6 +1,17 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from multiprocessing import Pool
+import pyneb as pn
+
+DataFileDict = {'H1': {'rec': 'h_i_rec_SH95.fits'},
+                'O2': {'atom': 'o_ii_atom_FFT04.dat', 'coll': 'o_ii_coll_Kal09.dat'},
+                'S2': {'coll': 's_ii_coll_TZ10.dat'}}
+
+pn.atomicData.setDataFileDict(DataFileDict)
+
+diag = pn.Diagnostics()
+diag.addDiag('[SII] 6716/6731', ('S2', 'L(6716)/L(6731)', 'RMS([E(6716), E(6731)])'))
 
 def display_summary(OIII_ratios, SII_ratios, temp, den):
     '''
@@ -24,6 +35,57 @@ def display_summary(OIII_ratios, SII_ratios, temp, den):
         print(f"OIII 4363/5007+ = {OIII_ratios[i]:.3f}, SII 6716/6731 = {SII_ratios[i]:.3f}, T = {temp[i]:.0f} K, n_e = {den[i]:.0f} cm-3")
 
 
+def compute_cross_temden(inputs):
+    OIII_ratio, SII_ratio = inputs
+    return diag.getCrossTemDen('[OIII] 4363/5007+', '[SII] 6716/6731', OIII_ratio, SII_ratio)
+
+
+def cross_temden(OIII_ratios, SII_ratios, multiprocess = False):
+
+    '''
+    This function uses the PyNeb getCrossTemDen function to compute the temperature and density
+    This function is to be used when the OIII and SII ratios are large arrays
+
+    Example run time with 10,000 random OIII and SII ratios: 
+    with multiprocess = True: 5 minutes, >16 minutes without multiprocess
+
+    Parameters:
+    OIII_ratios: list of float
+        List of OIII 4363/5007+ ratios
+    
+    SII_ratios: list of float
+        List of SII 6716/6731 ratios
+    
+    multiprocess: bool, optional
+        Whether to use multiprocessing
+    
+    Returns:
+    
+    temp: list of float
+        List of temperatures in K
+    
+    den: list of float
+        List of electron densities in cm^-3
+    '''
+
+    if multiprocess:
+        
+        temden_inputs = [(OIII, SII) for OIII, SII in zip(OIII_ratios, SII_ratios)]
+
+        # Parallel computation
+        with Pool(4) as p:  # Adjust the number of processes as needed
+            results = p.map(compute_cross_temden, temden_inputs)
+        
+        temps, dens = zip(*results)
+        
+        temp, den = list(temps), list(dens)
+    
+    else:
+        temp, den = diag.getCrossTemDen('[OIII] 4363/5007+', '[SII] 6716/6731', OIII_ratios, SII_ratios)
+
+    return temp, den
+
+
 def run_GetCritDensity(atom, K):
 
     '''
@@ -42,7 +104,6 @@ def run_GetCritDensity(atom, K):
     '''
     
     return atom.getCritDensity(K)
-
 
 def dist_getcritdensity(atom, K, return_type = 'array'):
 
